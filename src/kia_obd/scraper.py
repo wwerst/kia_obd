@@ -5,28 +5,16 @@ from prom_client import MetricServer
 
 metric_server = MetricServer()
 
-def spin(connection):
-    cmd = obd.commands.ENGINE_LOAD # select an OBD command (sensor)
-    response = connection.query(cmd) # send the command, and parse the response
-    print(f'Engine Load: {response.value:.3f}') # returns unit-bearing values thanks to Pint
-    cmd = obd.commands.FUEL_STATUS
-    response = connection.query(cmd)
-    print(f'FUEL_STATUS: {response.value}')
-    cmd = obd.commands.FUEL_LEVEL
-    response = connection.query(cmd)
-    print(f'FUEL_LEVEL: {response.value}')
 
-
-def spin_all(connection, valid_pids):
-    print_strs = []
-    for pid_num in valid_pids:
+def spin_pid_list(connection, pid_list):
+    for pid_num in pid_list:
         cmd = obd.commands[1][pid_num]
         response = connection.query(cmd)
-        data_name = f"{cmd.name}_{response.units}"
-        metric_server.update_metric(data_name, response.value)
-        print_strs.append(f'{cmd.name}: {response.value}')
-    for print_line in print_strs:
-        print(print_line)
+        if response is not None and response.value is not None:
+            data_name = f"{cmd.name}_pid{pid_num}_{response.value.units}"
+            metric_server.update_metric(data_name, response.value.magnitude)
+        else:
+            print(f"None received {pid_num}, {cmd.name}")
 
 
 def main():
@@ -64,6 +52,7 @@ def main():
             print(f'PID {hex(pid_num)} Supported: {response.value[i]}')
 
         blacklist_pids = [
+            obd.commands.FUEL_STATUS.pid,
             obd.commands.O2_SENSORS.pid,
             obd.commands.OBD_COMPLIANCE.pid,
             obd.commands.STATUS.pid,
@@ -76,7 +65,7 @@ def main():
         LOOP_TIME_GOAL = 2.0  # seconds
 
         while True:
-            spin_all(connection, scan_pids)
+            spin_pid_list(connection, scan_pids)
             spin_time = time.time() - start_time
             print(f'Loop took {spin_time:.3f} seconds')
             print()
